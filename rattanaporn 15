@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Calendar Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', 'Sarabun', sans-serif; }
+        .chat-container { height: calc(100vh - 200px); }
+        .message-bubble { max-width: 80%; transition: all 0.2s; }
+        .typing-dot { animation: typing 1.4s infinite; }
+        @keyframes typing { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-indigo-50">
+
+    <div class="max-w-2xl mx-auto h-screen flex flex-col p-4">
+        <!-- Header -->
+        <header class="bg-white border-b p-5 rounded-t-2xl shadow-sm flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="bg-indigo-600 p-2 rounded-lg">
+                    <i class="fas fa-calendar-check text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">ผู้ช่วยนัดหมาย AI</h1>
+                    <div class="flex items-center text-green-500 text-xs font-medium">
+                        <span class="w-2 h-2 bg-green-500 rounded-full mr-1.5"></span>
+                        พร้อมช่วยจัดตารางนัดหมาย
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat History -->
+        <div id="chat-window" class="flex-grow bg-white p-6 overflow-y-auto space-y-4 chat-container border-x">
+            <!-- AI Welcome Message -->
+            <div class="flex justify-start">
+                <div class="message-bubble bg-gray-100 text-gray-800 p-4 rounded-2xl rounded-tl-none">
+                    <p class="text-sm">สวัสดีครับ! ผมเป็นผู้ช่วยจัดตารางนัดหมาย 🗓️</p>
+                    <p class="text-sm mt-2">ผมสามารถช่วยคุณ:<br>
+                    • วางแผนการนัดหมาย<br>
+                    • แนะนำช่วงเวลาที่เหมาะสม<br>
+                    • เขียนสรุปนัดหมายเพื่อนำไปลง Google Calendar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-white p-4 rounded-b-2xl border-t shadow-lg">
+            <form id="chat-form" class="relative">
+                <input type="text" id="user-input" 
+                    class="w-full pl-4 pr-16 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                    placeholder="พิมพ์เรื่องที่ต้องการนัดหมาย เช่น 'นัดประชุมพรุ่งนี้ 10 โมง'...">
+                
+                <button type="submit" 
+                    class="absolute right-2 top-2 bottom-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </form>
+            
+            <div class="mt-3 flex gap-2 overflow-x-auto pb-1 text-xs">
+                <button onclick="quickAction('ช่วยนัดประชุมทีมงาน')" class="whitespace-nowrap bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors">ประชุมทีม</button>
+                <button onclick="quickAction('นัดหมายตรวจสุขภาพ')" class="whitespace-nowrap bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors">พบแพทย์</button>
+                <button onclick="quickAction('ขอตารางนัดกินข้าวกับเพื่อน')" class="whitespace-nowrap bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-full border border-indigo-100 hover:bg-indigo-100 transition-colors">นัดกินข้าว</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const apiKey = ""; // API Key will be injected by the environment
+        const model = "gemini-2.5-flash-preview-09-2025";
+        
+        const chatWindow = document.getElementById('chat-window');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+
+        const systemPrompt = `You are a professional Appointment & Calendar Assistant.
+        Rules:
+        1. Always respond in Thai.
+        2. Help users draft appointment details including Title, Date, Time, and Description.
+        3. If information is missing, politely ask the user.
+        4. Be polite, organized, and use emojis to make it friendly.
+        5. Structure appointment summaries clearly so the user can copy-paste them into a calendar app.`;
+
+        async function getAIResponse(message) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: message }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let retryCount = 0;
+            const delays = [1000, 2000, 4000, 8000, 16000];
+
+            while (retryCount < 5) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error('API Error');
+
+                    const data = await response.json();
+                    return data.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    retryCount++;
+                    if (retryCount === 5) return "ขออภัยครับ ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง";
+                    await new Promise(r => setTimeout(r, delays[retryCount - 1]));
+                }
+            }
+        }
+
+        function appendMessage(role, text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `message-bubble p-4 rounded-2xl text-sm shadow-sm ${
+                role === 'user' 
+                ? 'bg-indigo-600 text-white rounded-tr-none' 
+                : 'bg-gray-100 text-gray-800 rounded-tl-none border border-gray-200'
+            }`;
+            
+            bubble.innerText = text;
+            wrapper.appendChild(bubble);
+            chatWindow.appendChild(wrapper);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        function showTyping() {
+            const typing = document.createElement('div');
+            typing.id = 'typing-indicator';
+            typing.className = 'flex justify-start';
+            typing.innerHTML = `
+                <div class="message-bubble bg-gray-100 p-3 rounded-2xl rounded-tl-none flex space-x-1">
+                    <span class="typing-dot w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                    <span class="typing-dot w-1.5 h-1.5 bg-gray-400 rounded-full" style="animation-delay: 0.2s"></span>
+                    <span class="typing-dot w-1.5 h-1.5 bg-gray-400 rounded-full" style="animation-delay: 0.4s"></span>
+                </div>
+            `;
+            chatWindow.appendChild(typing);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            userInput.value = '';
+            appendMessage('user', text);
+            
+            showTyping();
+            
+            const response = await getAIResponse(text);
+            
+            document.getElementById('typing-indicator')?.remove();
+            appendMessage('ai', response);
+        });
+
+        window.quickAction = (text) => {
+            userInput.value = text;
+            chatForm.dispatchEvent(new Event('submit'));
+        };
+    </script>
+</body>
+</html>
